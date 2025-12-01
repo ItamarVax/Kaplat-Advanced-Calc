@@ -1,0 +1,48 @@
+04-06-2025 15:23:16.f INFO: Incoming request | #1 | resource: /calculator/stack/size | HTTP Verb GET | request #1
+04-06-2025 15:23:16.f INFO: Incoming request | #2 | resource: /calculator/stack/arguments | HTTP Verb PUT | request #2
+04-06-2025 15:23:16.f INFO: Incoming request | #3 | resource: /calculator/independent/calculate | HTTP Verb POST | request #3
+04-06-2025 15:23:17.f INFO: Incoming request | #4 | resource: /calculator/stack/size | HTTP Verb GET | request #4
+04-06-2025 15:23:17.f INFO: Incoming request | #5 | resource: /logs/level | HTTP Verb PUT | request #5
+04-06-2025 15:23:17.f INFO: Incoming request | #6 | resource: /calculator/stack/size | HTTP Verb GET | request #6
+04-06-2025 15:23:17.f INFO: Incoming request | #7 | resource: /calculator/stack/operate | HTTP Verb GET | request #7
+04-06-2025 15:23:17.f INFO: Incoming request | #8 | resource: /calculator/stack/operate | HTTP Verb GET | request #8
+04-06-2025 15:23:17.f INFO: Incoming request | #9 | resource: /calculator/stack/arguments | HTTP Verb PUT | request #9
+04-06-2025 15:23:17.f INFO: Incoming request | #10 | resource: /calculator/stack/operate | HTTP Verb GET | request #10
+04-06-2025 15:23:17.f INFO: Incoming request | #11 | resource: /logs/level | HTTP Verb PUT | request #11
+04-06-2025 15:23:17.f DEBUG: request #11 duration: 0ms | request #11
+04-06-2025 15:23:17.f INFO: Incoming request | #12 | resource: /calculator/stack/arguments | HTTP Verb PUT | request #12
+04-06-2025 15:23:17.f DEBUG: request #12 duration: 0ms | request #12
+04-06-2025 15:23:17.f INFO: Incoming request | #13 | resource: /calculator/history | HTTP Verb GET | request #13
+04-06-2025 15:23:17.f DEBUG: request #13 duration: 0ms | request #13
+04-06-2025 15:23:17.f INFO: Incoming request | #14 | resource: /calculator/stack/operate | HTTP Verb GET | request #14
+04-06-2025 15:23:17.f DEBUG: request #14 duration: 0ms | request #14
+04-06-2025 15:23:17.f INFO: Incoming request | #15 | resource: /calculator/stack/arguments | HTTP Verb DELETE | request #15
+04-06-2025 15:23:17.f DEBUG: request #15 duration: 0ms | request #15
+04-06-2025 15:23:17.f INFO: Incoming request | #16 | resource: /calculator/stack/size | HTTP Verb GET | request #16
+04-06-2025 15:23:17.f DEBUG: request #16 duration: 0ms | request #16
+04-06-2025 15:23:17.f INFO: Incoming request | #17 | resource: /calculator/history | HTTP Verb GET | request #17
+04-06-2025 15:23:17.f DEBUG: request #17 duration: 0ms | request #17
+04-06-2025 16:24:24.f INFO: Incoming request | #1 | resource: /calculator/stack/size | HTTP Verb GET | request #1
+04-06-2025 16:24:24.f INFO: Incoming request | #2 | resource: /calculator/stack/arguments | HTTP Verb PUT | request #2
+04-06-2025 16:24:24.f INFO: Incoming request | #3 | resource: /calculator/independent/calculate | HTTP Verb POST | request #3
+04-06-2025 16:24:24.f INFO: Incoming request | #4 | resource: /calculator/stack/size | HTTP Verb GET | request #4
+04-06-2025 16:24:24.f INFO: Incoming request | #5 | resource: /logs/level | HTTP Verb PUT | request #5
+04-06-2025 16:24:24.f INFO: Incoming request | #6 | resource: /calculator/stack/size | HTTP Verb GET | request #6
+04-06-2025 16:24:24.f INFO: Incoming request | #7 | resource: /calculator/stack/operate | HTTP Verb GET | request #7
+04-06-2025 16:24:24.f INFO: Incoming request | #8 | resource: /calculator/stack/operate | HTTP Verb GET | request #8
+04-06-2025 16:24:24.f INFO: Incoming request | #9 | resource: /calculator/stack/arguments | HTTP Verb PUT | request #9
+04-06-2025 16:24:24.f INFO: Incoming request | #10 | resource: /calculator/stack/operate | HTTP Verb GET | request #10
+04-06-2025 16:24:24.f INFO: Incoming request | #11 | resource: /logs/level | HTTP Verb PUT | request #11
+04-06-2025 16:24:24.f DEBUG: request #11 duration: 0ms | request #11
+04-06-2025 16:24:24.f INFO: Incoming request | #12 | resource: /calculator/stack/arguments | HTTP Verb PUT | request #12
+04-06-2025 16:24:24.f DEBUG: request #12 duration: 0ms | request #12
+04-06-2025 16:24:24.f INFO: Incoming request | #13 | resource: /calculator/history | HTTP Verb GET | request #13
+04-06-2025 16:24:24.f DEBUG: request #13 duration: 0ms | request #13
+04-06-2025 16:24:24.f INFO: Incoming request | #14 | resource: /calculator/stack/operate | HTTP Verb GET | request #14
+04-06-2025 16:24:24.f DEBUG: request #14 duration: 0ms | request #14
+04-06-2025 16:24:24.f INFO: Incoming request | #15 | resource: /calculator/stack/arguments | HTTP Verb DELETE | request #15
+04-06-2025 16:24:24.f DEBUG: request #15 duration: 0ms | request #15
+04-06-2025 16:24:24.f INFO: Incoming request | #16 | resource: /calculator/stack/size | HTTP Verb GET | request #16
+04-06-2025 16:24:24.f DEBUG: request #16 duration: 0ms | request #16
+04-06-2025 16:24:24.f INFO: Incoming request | #17 | resource: /calculator/history | HTTP Verb GET | request #17
+04-06-2025 16:24:24.f DEBUG: request #17 duration: 0ms | request #17
