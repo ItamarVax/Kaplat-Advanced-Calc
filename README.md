@@ -114,18 +114,43 @@ The server runs on port **8496** and provides endpoints for:
    cd CalcServer_Logger
    ```
 
-2. **Install dependencies**:
+2. **Create a virtual environment** (recommended):
+   ```bash
+   python3 -m venv venv
+   ```
+
+3. **Activate the virtual environment**:
+   
+   On macOS/Linux:
+   ```bash
+   source venv/bin/activate
+   ```
+   
+   On Windows:
+   ```bash
+   venv\Scripts\activate
+   ```
+
+4. **Install dependencies**:
    ```bash
    pip install -r requirements.txt
    ```
 
-   Or if you prefer to use the bundled libraries:
-   ```bash
-   # The project includes libraries in the libs/ directory
-   # Make sure Python can find them (server.py handles this)
-   ```
-
 ## Running the Server
+
+**Important**: Make sure your virtual environment is activated before running the server.
+
+### Activate Virtual Environment
+
+On macOS/Linux:
+```bash
+source venv/bin/activate
+```
+
+On Windows:
+```bash
+venv\Scripts\activate
+```
 
 ### Windows
 
@@ -136,7 +161,7 @@ run.bat
 
 Or run directly:
 ```bash
-python -S -E server.py
+python server.py
 ```
 
 ### Linux/macOS
@@ -363,7 +388,8 @@ CalcServer_Logger/
 ├── loggerRequests.py      # Request ID tracking
 ├── requirements.txt       # Python dependencies
 ├── run.bat               # Windows startup script
-├── libs/                 # Bundled Python libraries
+├── venv/                 # Virtual environment (created during installation)
+├── libs/                 # Optional: Bundled libraries (not needed with venv)
 └── logs/                 # Log files directory
     ├── requests.log      # Request/response logs
     ├── stack.log         # Stack operation logs
@@ -394,9 +420,10 @@ CalcServer_Logger/
 ## Troubleshooting
 
 **Server won't start:**
+- Ensure virtual environment is activated (`source venv/bin/activate` on macOS/Linux, `venv\Scripts\activate` on Windows)
 - Check if port 8496 is already in use
 - Verify Python version (3.9+)
-- Ensure all dependencies are installed
+- Ensure all dependencies are installed (`pip install -r requirements.txt`)
 
 **Logs not appearing:**
 - Check that `logs/` directory exists and is writable

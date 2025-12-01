@@ -1,6 +1,6 @@
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "libs"))
-import logging, time
+# import sys, os
+# sys.path.insert(0, os.path.join(os.path.dirname(__file__), "libs"))
+import logging, time, os
 from flask import Flask, request, jsonify, g
 from loggerBuilds import get_logger, get_logger_level, set_logger_level
 from loggerRequests import next_request_id
@@ -135,4 +135,5 @@ def set_level():
 
 
 if __name__ == "__main__":
-    app.run(port=8496, host="0.0.0.0")
+    port = int(os.environ.get('PORT', 8496))
+    app.run(port=port, host="0.0.0.0")
