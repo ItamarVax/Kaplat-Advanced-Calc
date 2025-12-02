@@ -47,30 +47,106 @@ Deploy the Docker container from EX5 (calculator server) to a cloud provider and
 
 ## Phase 2: AWS Setup & Configuration
 
+**Note**: Since you already have AWS CLI installed and are using SSO login, you can skip the installation steps and proceed directly to verification.
+
 ### 2.1 AWS Account Setup
-- [ ] Access AWS account
-- [ ] Verify account has necessary permissions for:
+- [ ] **Verify SSO login status**:
+  ```bash
+  aws sts get-caller-identity
+  ```
+  - Should return your AWS account ID, user ARN, and user ID
+  - If not logged in, run: `aws sso login`
+
+- [ ] **Verify account has necessary permissions** for:
   - ECR (Elastic Container Registry)
   - ECS (Elastic Container Service) or Elastic Beanstalk
   - IAM (for service roles)
-- [ ] Set up billing alerts (if applicable) to monitor costs
-- [ ] Choose AWS region (e.g., `us-east-1`, `eu-west-1`) - note this for later steps
+  - EC2 (for VPC, subnets, security groups)
+  - Elastic Load Balancing (for ALB)
+  - CloudWatch Logs (for logging)
 
-### 2.2 Install AWS CLI
-- [ ] Install AWS CLI v2:
-  - **macOS**: `brew install awscli` or download from AWS website
-  - **Windows**: Download MSI installer from AWS website
-  - **Linux**: `curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"`
-- [ ] Verify installation: `aws --version`
-- [ ] Configure AWS credentials:
+- [ ] **Test permissions** (optional):
   ```bash
-  aws configure
+  # Test ECR access
+  aws ecr describe-repositories --region us-east-1
+  
+  # Test ECS access
+  aws ecs list-clusters --region us-east-1
   ```
-  - Enter AWS Access Key ID
-  - Enter AWS Secret Access Key
-  - Enter default region (e.g., `us-east-1`)
-  - Enter default output format (e.g., `json`)
-- [ ] Test authentication: `aws sts get-caller-identity`
+
+- [ ] **Set up billing alerts** (if applicable) to monitor costs
+- [ ] **Choose AWS region** (e.g., `us-east-1`, `eu-west-1`) - note this for later steps
+
+### 2.2 Verify AWS CLI Setup (Already Installed)
+- [ ] **Verify AWS CLI is installed**:
+  ```bash
+  aws --version
+  # Should show: aws-cli/2.x.x Python/3.x.x Darwin/x.x.x source/x86_64
+  ```
+
+- [ ] **Verify SSO login status**:
+  ```bash
+  aws sts get-caller-identity
+  ```
+  - Should return your AWS account ID, user ARN, and user ID
+  - If you get an error, you may need to re-authenticate (see below)
+
+- [ ] **Re-authenticate with SSO** (if needed):
+  ```bash
+  aws sso login
+  ```
+  - This will open your browser for SSO authentication
+  - After successful login, your session will be active
+
+- [ ] **Check SSO session status**:
+  ```bash
+  aws sts get-caller-identity
+  ```
+  - Verify you're logged in and can see your account details
+
+- [ ] **Set default region** (if not already set):
+  ```bash
+  # Check current region
+  aws configure get region
+  
+  # Set default region (choose your preferred region)
+  aws configure set region us-east-1
+  # Or: aws configure set region eu-west-1
+  # Or: aws configure set region us-west-2
+  ```
+
+- [ ] **View current configuration**:
+  ```bash
+  aws configure list
+  ```
+
+- [ ] **List available SSO profiles** (if you have multiple):
+  ```bash
+  cat ~/.aws/config
+  # Look for [profile <profile-name>] sections
+  ```
+
+- [ ] **Use specific SSO profile** (if you have multiple profiles):
+  ```bash
+  # Set profile for current session
+  export AWS_PROFILE=<your-profile-name>
+  
+  # Or use --profile flag with commands
+  aws sts get-caller-identity --profile <your-profile-name>
+  ```
+
+- [ ] **Important: SSO Session Management**:
+  - SSO sessions typically expire after a set time (e.g., 1-12 hours)
+  - If you get authentication errors during deployment, re-authenticate:
+    ```bash
+    aws sso login
+    ```
+  - You can check session expiration:
+    ```bash
+    aws sts get-caller-identity
+    # If this fails, your session has expired
+    ```
+  - For long-running deployments, ensure your SSO session is fresh before starting
 
 ### 2.3 AWS Services Overview
 **Services you'll use:**
@@ -126,65 +202,188 @@ Deploy the Docker container from EX5 (calculator server) to a cloud provider and
 - [ ] Verify all endpoints work in container
 
 ### 4.2 Set Up ECR (Elastic Container Registry)
-- [ ] Get your AWS account ID:
+
+**Set variables for easier use (macOS terminal):**
+```bash
+# Set your AWS region (change to your preferred region)
+export AWS_REGION="us-east-1"
+
+# Get your AWS account ID
+export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --profile <account-name> --query Account --output text)
+
+# Set ECR repository name
+export ECR_REPO_NAME="calculator-server"
+
+# Set full ECR repository URI
+export ECR_REPO_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}"
+
+# Display the values
+echo "AWS Account ID: $AWS_ACCOUNT_ID"
+echo "AWS Region: $AWS_REGION"
+echo "ECR Repository URI: $ECR_REPO_URI"
+```
+
+- [ ] **Get your AWS account ID**:
   ```bash
   aws sts get-caller-identity --query Account --output text
   ```
-- [ ] Choose your AWS region (e.g., `us-east-1`, `eu-west-1`)
-- [ ] Create ECR repository:
+
+- [ ] **Choose your AWS region** (e.g., `us-east-1`, `eu-west-1`, `us-west-2`):
+  ```bash
+  # List available regions
+  aws ec2 describe-regions --query 'Regions[*].RegionName' --output text
+  ```
+
+- [ ] **Create ECR repository**:
   ```bash
   aws ecr create-repository \
     --repository-name calculator-server \
-    --region <YOUR_REGION>
+    --region $AWS_REGION \
+    --image-scanning-configuration scanOnPush=true \
+    --encryption-configuration encryptionType=AES256
   ```
-- [ ] Note the repository URI (format: `<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/calculator-server`)
-- [ ] Get login token and authenticate Docker:
+
+- [ ] **Verify repository was created**:
   ```bash
-  aws ecr get-login-password --region <YOUR_REGION> | \
-    docker login --username AWS --password-stdin <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com
+  aws ecr describe-repositories \
+    --repository-names calculator-server \
+    --region $AWS_REGION
+  ```
+
+- [ ] **Get login token and authenticate Docker**:
+  ```bash
+  aws ecr get-login-password --region $AWS_REGION | \
+    docker login --username AWS --password-stdin $ECR_REPO_URI
+  ```
+  - Expected output: `Login Succeeded`
+
+- [ ] **List ECR repositories** (to verify):
+  ```bash
+  aws ecr describe-repositories --region $AWS_REGION --output table
   ```
 
 ### 4.3 Build and Push Docker Image to ECR
-- [ ] Build Docker image:
+
+**Make sure you've set the variables from section 4.2, or set them again:**
+```bash
+export AWS_REGION="us-east-1"
+export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+export ECR_REPO_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/calculator-server"
+```
+
+- [ ] **Build Docker image**:
   ```bash
   docker build -t calculator-server .
   ```
-- [ ] Tag image for ECR:
+
+- [ ] **Verify image was built**:
   ```bash
-  docker tag calculator-server:latest \
-    <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/calculator-server:latest
+  docker images | grep calculator-server
   ```
-- [ ] Push image to ECR:
+
+- [ ] **Tag image for ECR**:
   ```bash
-  docker push <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/calculator-server:latest
+  docker tag calculator-server:latest $ECR_REPO_URI:latest
   ```
-- [ ] Verify image in ECR:
+
+- [ ] **Verify tagged image**:
   ```bash
-  aws ecr describe-images --repository-name calculator-server --region <YOUR_REGION>
+  docker images | grep calculator-server
+  ```
+
+- [ ] **Push image to ECR**:
+  ```bash
+  docker push $ECR_REPO_URI:latest
+  ```
+  - This may take a few minutes depending on image size and internet speed
+
+- [ ] **Verify image in ECR**:
+  ```bash
+  aws ecr describe-images \
+    --repository-name calculator-server \
+    --region $AWS_REGION \
+    --output table
+  ```
+
+- [ ] **Get image details** (optional):
+  ```bash
+  aws ecr describe-images \
+    --repository-name calculator-server \
+    --image-ids imageTag=latest \
+    --region $AWS_REGION \
+    --query 'imageDetails[0]' \
+    --output json
   ```
 
 ### 4.4 Deploy to ECS Fargate (Recommended Method)
 
 #### 4.4.1 Create ECS Cluster
-- [ ] Create Fargate cluster:
+
+**Set cluster name variable:**
+```bash
+export CLUSTER_NAME="calculator-cluster"
+```
+
+- [ ] **Create Fargate cluster**:
   ```bash
-  aws ecs create-cluster --cluster-name calculator-cluster --region <YOUR_REGION>
+  aws ecs create-cluster \
+    --cluster-name $CLUSTER_NAME \
+    --region $AWS_REGION \
+    --capacity-providers FARGATE FARGATE_SPOT \
+    --default-capacity-provider-strategy capacityProvider=FARGATE,weight=1
   ```
-- [ ] Or use AWS Console: ECS → Clusters → Create Cluster → Select "Fargate"
+
+- [ ] **Verify cluster was created**:
+  ```bash
+  aws ecs describe-clusters \
+    --clusters $CLUSTER_NAME \
+    --region $AWS_REGION \
+    --output table
+  ```
+
+- [ ] **List all clusters** (optional):
+  ```bash
+  aws ecs list-clusters --region $AWS_REGION --output table
+  ```
 
 #### 4.4.2 Create Task Definition
-- [ ] Create task definition JSON file (`task-definition.json`):
-  ```json
+
+**Set task definition variables:**
+```bash
+export TASK_FAMILY="calculator-server"
+export LOG_GROUP_NAME="/ecs/calculator-server"
+```
+
+- [ ] **Create CloudWatch log group** (required before task definition):
+  ```bash
+  aws logs create-log-group \
+    --log-group-name $LOG_GROUP_NAME \
+    --region $AWS_REGION
+  ```
+
+- [ ] **Verify log group was created**:
+  ```bash
+  aws logs describe-log-groups \
+    --log-group-name-prefix "/ecs/" \
+    --region $AWS_REGION \
+    --output table
+  ```
+
+- [ ] **Create task definition JSON file** (`task-definition.json`):
+  ```bash
+  cat > task-definition.json <<EOF
   {
-    "family": "calculator-server",
+    "family": "$TASK_FAMILY",
     "networkMode": "awsvpc",
     "requiresCompatibilities": ["FARGATE"],
     "cpu": "256",
     "memory": "512",
+    "executionRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/ecsTaskExecutionRole",
+    "taskRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/ecsTaskRole",
     "containerDefinitions": [
       {
         "name": "calculator-server",
-        "image": "<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/calculator-server:latest",
+        "image": "${ECR_REPO_URI}:latest",
         "essential": true,
         "portMappings": [
           {
@@ -201,79 +400,320 @@ Deploy the Docker container from EX5 (calculator server) to a cloud provider and
         "logConfiguration": {
           "logDriver": "awslogs",
           "options": {
-            "awslogs-group": "/ecs/calculator-server",
-            "awslogs-region": "<YOUR_REGION>",
+            "awslogs-group": "$LOG_GROUP_NAME",
+            "awslogs-region": "$AWS_REGION",
             "awslogs-stream-prefix": "ecs"
           }
         }
       }
     ]
   }
+  EOF
   ```
-- [ ] Create CloudWatch log group:
+
+  **Note**: If you get IAM role errors, you may need to create the execution role first (see IAM setup below) or remove the `executionRoleArn` and `taskRoleArn` lines temporarily.
+
+- [ ] **Create IAM execution role** (if it doesn't exist):
   ```bash
-  aws logs create-log-group --log-group-name /ecs/calculator-server --region <YOUR_REGION>
+  # Create trust policy file
+  cat > trust-policy.json <<EOF
+  {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Principal": {
+          "Service": "ecs-tasks.amazonaws.com"
+        },
+        "Action": "sts:AssumeRole"
+      }
+    ]
+  }
+  EOF
+
+  # Create the role
+  aws iam create-role \
+    --role-name ecsTaskExecutionRole \
+    --assume-role-policy-document file://trust-policy.json \
+    --region $AWS_REGION
+
+  # Attach the managed policy for ECS task execution
+  aws iam attach-role-policy \
+    --role-name ecsTaskExecutionRole \
+    --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy \
+    --region $AWS_REGION
   ```
-- [ ] Register task definition:
+
+- [ ] **Register task definition**:
   ```bash
-  aws ecs register-task-definition --cli-input-json file://task-definition.json --region <YOUR_REGION>
+  aws ecs register-task-definition \
+    --cli-input-json file://task-definition.json \
+    --region $AWS_REGION
+  ```
+
+- [ ] **Verify task definition was created**:
+  ```bash
+  aws ecs describe-task-definition \
+    --task-definition $TASK_FAMILY \
+    --region $AWS_REGION \
+    --query 'taskDefinition.[family,revision,status]' \
+    --output table
+  ```
+
+- [ ] **List all task definitions** (optional):
+  ```bash
+  aws ecs list-task-definitions \
+    --family-prefix $TASK_FAMILY \
+    --region $AWS_REGION \
+    --output table
   ```
 
 #### 4.4.3 Create ECS Service
-- [ ] Create VPC and subnets (or use default):
-  - Note: You may need to create a VPC, subnets, and security group
-  - Or use default VPC: `aws ec2 describe-vpcs --filters "Name=isDefault,Values=true"`
-- [ ] Create security group allowing inbound traffic on port 8496:
+
+**Get VPC and subnet information:**
+```bash
+# Get default VPC ID
+export VPC_ID=$(aws ec2 describe-vpcs \
+  --filters "Name=isDefault,Values=true" \
+  --query 'Vpcs[0].VpcId' \
+  --output text \
+  --region $AWS_REGION)
+
+echo "VPC ID: $VPC_ID"
+
+# Get subnet IDs in the default VPC (need at least 2 for ALB)
+export SUBNET_IDS=$(aws ec2 describe-subnets \
+  --filters "Name=vpc-id,Values=$VPC_ID" \
+  --query 'Subnets[*].SubnetId' \
+  --output text \
+  --region $AWS_REGION)
+
+echo "Subnet IDs: $SUBNET_IDS"
+
+# Get first subnet ID (for single subnet deployment without ALB)
+export SUBNET_ID=$(echo $SUBNET_IDS | awk '{print $1}')
+echo "Using Subnet ID: $SUBNET_ID"
+```
+
+- [ ] **Get VPC and subnet information**:
   ```bash
-  aws ec2 create-security-group \
-    --group-name calculator-sg \
-    --description "Security group for calculator server" \
-    --region <YOUR_REGION>
+  # List all VPCs
+  aws ec2 describe-vpcs --region $AWS_REGION --output table
+  
+  # Get default VPC ID
+  export VPC_ID=$(aws ec2 describe-vpcs \
+    --filters "Name=isDefault,Values=true" \
+    --query 'Vpcs[0].VpcId' \
+    --output text \
+    --region $AWS_REGION)
+  
+  # Get subnet IDs
+  export SUBNET_IDS=$(aws ec2 describe-subnets \
+    --filters "Name=vpc-id,Values=$VPC_ID" \
+    --query 'Subnets[*].SubnetId' \
+    --output text \
+    --region $AWS_REGION)
+  
+  # Get first subnet
+  export SUBNET_ID=$(echo $SUBNET_IDS | awk '{print $1}')
   ```
-- [ ] Add inbound rule to security group:
+
+- [ ] **Create security group**:
+  ```bash
+  export SG_NAME="calculator-sg"
+  
+  export SECURITY_GROUP_ID=$(aws ec2 create-security-group \
+    --group-name $SG_NAME \
+    --description "Security group for calculator server" \
+    --vpc-id $VPC_ID \
+    --region $AWS_REGION \
+    --query 'GroupId' \
+    --output text)
+  
+  echo "Security Group ID: $SECURITY_GROUP_ID"
+  ```
+
+- [ ] **Add inbound rule to security group** (allow port 8496):
   ```bash
   aws ec2 authorize-security-group-ingress \
-    --group-id <SECURITY_GROUP_ID> \
+    --group-id $SECURITY_GROUP_ID \
     --protocol tcp \
     --port 8496 \
     --cidr 0.0.0.0/0 \
-    --region <YOUR_REGION>
+    --region $AWS_REGION
   ```
-- [ ] Create Application Load Balancer (ALB) for public access:
-  - Use AWS Console: EC2 → Load Balancers → Create Load Balancer
-  - Select "Application Load Balancer"
-  - Configure:
-    - Scheme: Internet-facing
-    - IP address type: IPv4
-    - Listeners: HTTP on port 80 (forward to port 8496)
-    - Target group: Create new (port 8496, protocol HTTP)
-    - Health check: `/calculator/health`
-- [ ] Get ALB ARN and target group ARN from console
-- [ ] Create ECS service:
+
+- [ ] **Verify security group rules**:
   ```bash
+  aws ec2 describe-security-groups \
+    --group-ids $SECURITY_GROUP_ID \
+    --region $AWS_REGION \
+    --output table
+  ```
+
+- [ ] **Create Application Load Balancer (ALB)**:
+  ```bash
+  export ALB_NAME="calculator-alb"
+  
+  # Get at least 2 subnet IDs for ALB (ALB requires subnets in at least 2 AZs)
+  export SUBNET_ID_1=$(echo $SUBNET_IDS | awk '{print $1}')
+  export SUBNET_ID_2=$(echo $SUBNET_IDS | awk '{print $2}')
+  
+  # Create ALB
+  export ALB_ARN=$(aws elbv2 create-load-balancer \
+    --name $ALB_NAME \
+    --subnets $SUBNET_ID_1 $SUBNET_ID_2 \
+    --scheme internet-facing \
+    --type application \
+    --ip-address-type ipv4 \
+    --region $AWS_REGION \
+    --query 'LoadBalancers[0].LoadBalancerArn' \
+    --output text)
+  
+  echo "ALB ARN: $ALB_ARN"
+  
+  # Get ALB DNS name
+  export ALB_DNS=$(aws elbv2 describe-load-balancers \
+    --load-balancer-arns $ALB_ARN \
+    --region $AWS_REGION \
+    --query 'LoadBalancers[0].DNSName' \
+    --output text)
+  
+  echo "ALB DNS: $ALB_DNS"
+  ```
+
+- [ ] **Create target group**:
+  ```bash
+  export TG_NAME="calculator-tg"
+  
+  export TARGET_GROUP_ARN=$(aws elbv2 create-target-group \
+    --name $TG_NAME \
+    --protocol HTTP \
+    --port 8496 \
+    --vpc-id $VPC_ID \
+    --target-type ip \
+    --health-check-path /calculator/health \
+    --health-check-interval-seconds 30 \
+    --health-check-timeout-seconds 5 \
+    --healthy-threshold-count 2 \
+    --unhealthy-threshold-count 3 \
+    --region $AWS_REGION \
+    --query 'TargetGroups[0].TargetGroupArn' \
+    --output text)
+  
+  echo "Target Group ARN: $TARGET_GROUP_ARN"
+  ```
+
+- [ ] **Create listener for ALB** (forward port 80 to target group):
+  ```bash
+  aws elbv2 create-listener \
+    --load-balancer-arn $ALB_ARN \
+    --protocol HTTP \
+    --port 80 \
+    --default-actions Type=forward,TargetGroupArn=$TARGET_GROUP_ARN \
+    --region $AWS_REGION
+  ```
+
+- [ ] **Create ECS service**:
+  ```bash
+  export SERVICE_NAME="calculator-service"
+  
   aws ecs create-service \
-    --cluster calculator-cluster \
-    --service-name calculator-service \
-    --task-definition calculator-server \
+    --cluster $CLUSTER_NAME \
+    --service-name $SERVICE_NAME \
+    --task-definition $TASK_FAMILY \
     --desired-count 1 \
     --launch-type FARGATE \
-    --network-configuration "awsvpcConfiguration={subnets=[<SUBNET_ID>],securityGroups=[<SECURITY_GROUP_ID>],assignPublicIp=ENABLED}" \
-    --load-balancers "targetGroupArn=<TARGET_GROUP_ARN>,containerName=calculator-server,containerPort=8496" \
-    --region <YOUR_REGION>
+    --network-configuration "awsvpcConfiguration={subnets=[$SUBNET_ID_1,$SUBNET_ID_2],securityGroups=[$SECURITY_GROUP_ID],assignPublicIp=ENABLED}" \
+    --load-balancers "targetGroupArn=$TARGET_GROUP_ARN,containerName=calculator-server,containerPort=8496" \
+    --region $AWS_REGION
   ```
-- [ ] **Alternative: Use AWS Console** (easier for first-time setup):
-  - ECS → Clusters → calculator-cluster → Services → Create
-  - Configure service settings
-  - Set desired count to 1 (for 24/7 availability)
+
+- [ ] **Verify service was created**:
+  ```bash
+  aws ecs describe-services \
+    --cluster $CLUSTER_NAME \
+    --services $SERVICE_NAME \
+    --region $AWS_REGION \
+    --output table
+  ```
+
+- [ ] **Check service status**:
+  ```bash
+  aws ecs describe-services \
+    --cluster $CLUSTER_NAME \
+    --services $SERVICE_NAME \
+    --region $AWS_REGION \
+    --query 'services[0].[serviceName,status,runningCount,desiredCount]' \
+    --output table
+  ```
 
 #### 4.4.4 Get Public URL
-- [ ] Get ALB DNS name:
+
+**Get ALB DNS name:**
+```bash
+# If you set ALB_DNS earlier, it's already available
+# Otherwise, get it:
+export ALB_DNS=$(aws elbv2 describe-load-balancers \
+  --region $AWS_REGION \
+  --query 'LoadBalancers[?LoadBalancerName==`calculator-alb`].DNSName' \
+  --output text)
+
+echo "Your public URL: http://$ALB_DNS"
+```
+
+- [ ] **Get ALB DNS name**:
   ```bash
-  aws elbv2 describe-load-balancers --region <YOUR_REGION> --query 'LoadBalancers[?LoadBalancerName==`<ALB_NAME>`].DNSName' --output text
+  export ALB_DNS=$(aws elbv2 describe-load-balancers \
+    --region $AWS_REGION \
+    --query 'LoadBalancers[?LoadBalancerName==`calculator-alb`].DNSName' \
+    --output text)
+  
+  echo "Public URL: http://$ALB_DNS"
   ```
-- [ ] Your public URL will be: `http://<ALB_DNS_NAME>`
-- [ ] Test URL: `curl http://<ALB_DNS_NAME>/calculator/health`
-- [ ] **Note**: For HTTPS, you'll need to configure SSL certificate (optional but recommended)
+
+- [ ] **Wait for service to be stable** (may take 2-5 minutes):
+  ```bash
+  # Check service status
+  aws ecs describe-services \
+    --cluster $CLUSTER_NAME \
+    --services $SERVICE_NAME \
+    --region $AWS_REGION \
+    --query 'services[0].events[0:3]' \
+    --output table
+  
+  # Wait until running count equals desired count
+  aws ecs wait services-stable \
+    --cluster $CLUSTER_NAME \
+    --services $SERVICE_NAME \
+    --region $AWS_REGION
+  ```
+
+- [ ] **Test health endpoint**:
+  ```bash
+  curl http://$ALB_DNS/calculator/health
+  ```
+  - Expected response: `OK`
+
+- [ ] **Test other endpoints**:
+  ```bash
+  # Test stack size
+  curl http://$ALB_DNS/calculator/stack/size
+  
+  # Test independent calculation
+  curl -X POST http://$ALB_DNS/calculator/independent/calculate \
+    -H "Content-Type: application/json" \
+    -d '{"operation": "plus", "arguments": [5, 3]}'
+  ```
+
+- [ ] **Your final submission URL will be**: `http://$ALB_DNS`
+  - Make sure to note this down for your submission JSON file!
+
+- [ ] **Optional: Set up HTTPS** (for production, not required for exercise):
+  ```bash
+  # This requires an SSL certificate from ACM (AWS Certificate Manager)
+  # For the exercise, HTTP is sufficient
+  ```
 
 ### 4.5 Alternative: Deploy to Elastic Beanstalk (Simpler Option)
 
@@ -304,14 +744,90 @@ Deploy the Docker container from EX5 (calculator server) to a cloud provider and
 - [ ] Your URL will be: `http://<ENVIRONMENT_NAME>.elasticbeanstalk.com`
 
 ### 4.6 Configure for 24/7 Availability
-- [ ] **ECS Fargate**: Ensure service desired count = 1 (already set in step 4.4.3)
-- [ ] **Elastic Beanstalk**: Configure environment to keep at least 1 instance running
-- [ ] Set up health checks (already configured in ALB/EB)
-- [ ] Monitor service status:
+
+- [ ] **Verify service desired count is 1** (for 24/7 availability):
   ```bash
-  aws ecs describe-services --cluster calculator-cluster --services calculator-service --region <YOUR_REGION>
+  aws ecs describe-services \
+    --cluster $CLUSTER_NAME \
+    --services $SERVICE_NAME \
+    --region $AWS_REGION \
+    --query 'services[0].[desiredCount,runningCount]' \
+    --output table
   ```
-- [ ] Verify service is running and healthy
+
+- [ ] **Update service if needed** (ensure desired count = 1):
+  ```bash
+  aws ecs update-service \
+    --cluster $CLUSTER_NAME \
+    --service $SERVICE_NAME \
+    --desired-count 1 \
+    --region $AWS_REGION
+  ```
+
+- [ ] **Verify health checks are working**:
+  ```bash
+  # Check target group health
+  aws elbv2 describe-target-health \
+    --target-group-arn $TARGET_GROUP_ARN \
+    --region $AWS_REGION \
+    --output table
+  ```
+
+- [ ] **Monitor service status**:
+  ```bash
+  # Check service events
+  aws ecs describe-services \
+    --cluster $CLUSTER_NAME \
+    --services $SERVICE_NAME \
+    --region $AWS_REGION \
+    --query 'services[0].events[0:5]' \
+    --output table
+  ```
+
+- [ ] **Check CloudWatch logs** (if issues occur):
+  ```bash
+  # View recent log streams
+  aws logs describe-log-streams \
+    --log-group-name $LOG_GROUP_NAME \
+    --order-by LastEventTime \
+    --descending \
+    --max-items 5 \
+    --region $AWS_REGION \
+    --output table
+  
+  # Get recent log events
+  export LOG_STREAM=$(aws logs describe-log-streams \
+    --log-group-name $LOG_GROUP_NAME \
+    --order-by LastEventTime \
+    --descending \
+    --max-items 1 \
+    --region $AWS_REGION \
+    --query 'logStreams[0].logStreamName' \
+    --output text)
+  
+  aws logs get-log-events \
+    --log-group-name $LOG_GROUP_NAME \
+    --log-stream-name $LOG_STREAM \
+    --limit 20 \
+    --region $AWS_REGION \
+    --output text
+  ```
+
+- [ ] **Set up CloudWatch alarms** (optional, for monitoring):
+  ```bash
+  # Create alarm for service not running
+  aws cloudwatch put-metric-alarm \
+    --alarm-name calculator-service-down \
+    --alarm-description "Alert when calculator service is down" \
+    --metric-name RunningTaskCount \
+    --namespace AWS/ECS \
+    --statistic Average \
+    --period 60 \
+    --threshold 1 \
+    --comparison-operator LessThanThreshold \
+    --evaluation-periods 1 \
+    --region $AWS_REGION
+  ```
 
 ---
 
@@ -435,6 +951,61 @@ Deploy the Docker container from EX5 (calculator server) to a cloud provider and
 - `POST /calculator/independent/calculate` - Independent calculations
 - `GET /calculator/history` - Operation history
 
+### 🔧 AWS Troubleshooting Commands (macOS)
+
+**Quick reference commands for troubleshooting:**
+
+```bash
+# Set variables (if not already set)
+export AWS_REGION="us-east-1"
+export CLUSTER_NAME="calculator-cluster"
+export SERVICE_NAME="calculator-service"
+export TASK_FAMILY="calculator-server"
+
+# Check service status
+aws ecs describe-services \
+  --cluster $CLUSTER_NAME \
+  --services $SERVICE_NAME \
+  --region $AWS_REGION \
+  --query 'services[0].[status,runningCount,desiredCount,events[0:3]]' \
+  --output table
+
+# List running tasks
+aws ecs list-tasks \
+  --cluster $CLUSTER_NAME \
+  --service-name $SERVICE_NAME \
+  --region $AWS_REGION
+
+# Describe a specific task
+export TASK_ARN=$(aws ecs list-tasks \
+  --cluster $CLUSTER_NAME \
+  --service-name $SERVICE_NAME \
+  --region $AWS_REGION \
+  --query 'taskArns[0]' \
+  --output text)
+
+aws ecs describe-tasks \
+  --cluster $CLUSTER_NAME \
+  --tasks $TASK_ARN \
+  --region $AWS_REGION \
+  --output json
+
+# Check target group health
+export TARGET_GROUP_ARN=$(aws elbv2 describe-target-groups \
+  --names calculator-tg \
+  --region $AWS_REGION \
+  --query 'TargetGroups[0].TargetGroupArn' \
+  --output text)
+
+aws elbv2 describe-target-health \
+  --target-group-arn $TARGET_GROUP_ARN \
+  --region $AWS_REGION \
+  --output table
+
+# View CloudWatch logs
+aws logs tail /ecs/calculator-server --follow --region $AWS_REGION
+```
+
 ### 🔧 AWS Troubleshooting Tips
 - **Port Issues**: 
   - Update server.py to use `PORT` environment variable
@@ -460,10 +1031,62 @@ Deploy the Docker container from EX5 (calculator server) to a cloud provider and
 - **ECR Authentication Issues**:
   - Re-authenticate: `aws ecr get-login-password --region <REGION> | docker login --username AWS --password-stdin <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com`
 - **Service Not Starting**:
-  - Check task definition: `aws ecs describe-task-definition --task-definition calculator-server`
-  - Review service events: `aws ecs describe-services --cluster calculator-cluster --services calculator-service`
-  - Verify VPC and subnet configuration
-  - Check security group rules
+  ```bash
+  # Check task definition
+  aws ecs describe-task-definition \
+    --task-definition calculator-server \
+    --region $AWS_REGION \
+    --output json
+  
+  # Review service events
+  aws ecs describe-services \
+    --cluster calculator-cluster \
+    --services calculator-service \
+    --region $AWS_REGION \
+    --query 'services[0].events[0:10]' \
+    --output table
+  
+  # Verify VPC and subnet configuration
+  aws ec2 describe-vpcs --region $AWS_REGION --output table
+  aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" --region $AWS_REGION --output table
+  
+  # Check security group rules
+  aws ec2 describe-security-groups \
+    --group-ids $SECURITY_GROUP_ID \
+    --region $AWS_REGION \
+    --output table
+  ```
+
+- **View Real-time Logs**:
+  ```bash
+  # Tail CloudWatch logs in real-time
+  aws logs tail /ecs/calculator-server --follow --region $AWS_REGION
+  
+  # Or view recent logs
+  aws logs tail /ecs/calculator-server --since 10m --region $AWS_REGION
+  ```
+
+- **Restart Service** (if needed):
+  ```bash
+  # Force new deployment
+  aws ecs update-service \
+    --cluster $CLUSTER_NAME \
+    --service $SERVICE_NAME \
+    --force-new-deployment \
+    --region $AWS_REGION
+  ```
+
+- **Delete and Recreate** (if everything fails):
+  ```bash
+  # Delete service
+  aws ecs delete-service \
+    --cluster $CLUSTER_NAME \
+    --service $SERVICE_NAME \
+    --force \
+    --region $AWS_REGION
+  
+  # Then recreate using commands from section 4.4.3
+  ```
 
 ### 📚 AWS Resources
 - JSON Validator: https://jsonlint.com/
@@ -485,4 +1108,196 @@ Deploy the Docker container from EX5 (calculator server) to a cloud provider and
 - **Before Deadline**: Phase 7 (Final Testing & Submission)
 
 **Start early** to allow time for troubleshooting and learning cloud provider specifics!
+
+---
+
+## Quick Reference: AWS CLI Commands for macOS
+
+### Initial Setup (Run Once)
+
+```bash
+# 1. Verify AWS CLI is installed (already done)
+aws --version
+
+# 2. Verify SSO login (re-authenticate if needed)
+aws sts get-caller-identity
+# If you get an error, run: aws sso login
+
+# 3. Set all variables (copy-paste this block)
+export AWS_REGION="us-east-1"  # Change to your preferred region
+export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+export CLUSTER_NAME="calculator-cluster"
+export SERVICE_NAME="calculator-service"
+export TASK_FAMILY="calculator-server"
+export ECR_REPO_NAME="calculator-server"
+export ECR_REPO_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}"
+export LOG_GROUP_NAME="/ecs/calculator-server"
+export VPC_ID=$(aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query 'Vpcs[0].VpcId' --output text --region $AWS_REGION)
+export SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" --query 'Subnets[*].SubnetId' --output text --region $AWS_REGION)
+export SUBNET_ID_1=$(echo $SUBNET_IDS | awk '{print $1}')
+export SUBNET_ID_2=$(echo $SUBNET_IDS | awk '{print $2}')
+export SG_NAME="calculator-sg"
+export ALB_NAME="calculator-alb"
+export TG_NAME="calculator-tg"
+
+# Display all variables
+echo "=== AWS Configuration ==="
+echo "Region: $AWS_REGION"
+echo "Account ID: $AWS_ACCOUNT_ID"
+echo "VPC ID: $VPC_ID"
+echo "ECR URI: $ECR_REPO_URI"
+echo "========================"
+```
+
+### Complete Deployment Workflow
+
+```bash
+# Step 1: Create ECR repository
+aws ecr create-repository --repository-name calculator-server --region $AWS_REGION
+
+# Step 2: Authenticate Docker to ECR
+aws ecr get-login-password --region $AWS_REGION | \
+  docker login --username AWS --password-stdin $ECR_REPO_URI
+
+# Step 3: Build, tag, and push Docker image
+docker build -t calculator-server .
+docker tag calculator-server:latest $ECR_REPO_URI:latest
+docker push $ECR_REPO_URI:latest
+
+# Step 4: Create ECS cluster
+aws ecs create-cluster --cluster-name $CLUSTER_NAME --region $AWS_REGION
+
+# Step 5: Create CloudWatch log group
+aws logs create-log-group --log-group-name $LOG_GROUP_NAME --region $AWS_REGION
+
+# Step 6: Create task definition (create task-definition.json first - see section 4.4.2)
+aws ecs register-task-definition --cli-input-json file://task-definition.json --region $AWS_REGION
+
+# Step 7: Create security group
+export SECURITY_GROUP_ID=$(aws ec2 create-security-group \
+  --group-name $SG_NAME \
+  --description "Security group for calculator server" \
+  --vpc-id $VPC_ID \
+  --region $AWS_REGION \
+  --query 'GroupId' --output text)
+
+# Step 8: Add security group rule
+aws ec2 authorize-security-group-ingress \
+  --group-id $SECURITY_GROUP_ID \
+  --protocol tcp --port 8496 --cidr 0.0.0.0/0 --region $AWS_REGION
+
+# Step 9: Create Application Load Balancer
+export ALB_ARN=$(aws elbv2 create-load-balancer \
+  --name $ALB_NAME \
+  --subnets $SUBNET_ID_1 $SUBNET_ID_2 \
+  --scheme internet-facing --type application --ip-address-type ipv4 \
+  --region $AWS_REGION \
+  --query 'LoadBalancers[0].LoadBalancerArn' --output text)
+
+# Step 10: Create target group
+export TARGET_GROUP_ARN=$(aws elbv2 create-target-group \
+  --name $TG_NAME \
+  --protocol HTTP --port 8496 --vpc-id $VPC_ID --target-type ip \
+  --health-check-path /calculator/health \
+  --region $AWS_REGION \
+  --query 'TargetGroups[0].TargetGroupArn' --output text)
+
+# Step 11: Create ALB listener
+aws elbv2 create-listener \
+  --load-balancer-arn $ALB_ARN \
+  --protocol HTTP --port 80 \
+  --default-actions Type=forward,TargetGroupArn=$TARGET_GROUP_ARN \
+  --region $AWS_REGION
+
+# Step 12: Create ECS service
+aws ecs create-service \
+  --cluster $CLUSTER_NAME \
+  --service-name $SERVICE_NAME \
+  --task-definition $TASK_FAMILY \
+  --desired-count 1 \
+  --launch-type FARGATE \
+  --network-configuration "awsvpcConfiguration={subnets=[$SUBNET_ID_1,$SUBNET_ID_2],securityGroups=[$SECURITY_GROUP_ID],assignPublicIp=ENABLED}" \
+  --load-balancers "targetGroupArn=$TARGET_GROUP_ARN,containerName=calculator-server,containerPort=8496" \
+  --region $AWS_REGION
+
+# Step 13: Get public URL
+export ALB_DNS=$(aws elbv2 describe-load-balancers \
+  --region $AWS_REGION \
+  --query 'LoadBalancers[?LoadBalancerName==`calculator-alb`].DNSName' \
+  --output text)
+
+echo "Your public URL: http://$ALB_DNS"
+
+# Step 14: Wait for service to be stable
+aws ecs wait services-stable \
+  --cluster $CLUSTER_NAME \
+  --services $SERVICE_NAME \
+  --region $AWS_REGION
+
+# Step 15: Test the endpoint
+curl http://$ALB_DNS/calculator/health
+```
+
+### Useful Monitoring Commands
+
+```bash
+# Check service status
+aws ecs describe-services \
+  --cluster $CLUSTER_NAME \
+  --services $SERVICE_NAME \
+  --region $AWS_REGION \
+  --query 'services[0].[status,runningCount,desiredCount]' \
+  --output table
+
+# Check target group health
+aws elbv2 describe-target-health \
+  --target-group-arn $TARGET_GROUP_ARN \
+  --region $AWS_REGION \
+  --output table
+
+# View recent logs
+aws logs tail $LOG_GROUP_NAME --since 10m --region $AWS_REGION
+
+# Follow logs in real-time
+aws logs tail $LOG_GROUP_NAME --follow --region $AWS_REGION
+```
+
+### Cleanup Commands (If You Need to Start Over)
+
+```bash
+# Delete ECS service
+aws ecs update-service \
+  --cluster $CLUSTER_NAME \
+  --service $SERVICE_NAME \
+  --desired-count 0 \
+  --region $AWS_REGION
+
+aws ecs delete-service \
+  --cluster $CLUSTER_NAME \
+  --service $SERVICE_NAME \
+  --region $AWS_REGION
+
+# Delete load balancer
+aws elbv2 delete-load-balancer --load-balancer-arn $ALB_ARN --region $AWS_REGION
+
+# Delete target group
+aws elbv2 delete-target-group --target-group-arn $TARGET_GROUP_ARN --region $AWS_REGION
+
+# Delete security group
+aws ec2 delete-security-group --group-id $SECURITY_GROUP_ID --region $AWS_REGION
+
+# Delete ECS cluster
+aws ecs delete-cluster --cluster $CLUSTER_NAME --region $AWS_REGION
+
+# Delete ECR repository (and all images)
+aws ecr delete-repository \
+  --repository-name calculator-server \
+  --force \
+  --region $AWS_REGION
+
+# Delete CloudWatch log group
+aws logs delete-log-group --log-group-name $LOG_GROUP_NAME --region $AWS_REGION
+```
+
+**Note**: Replace all `<VARIABLE>` placeholders with actual values or use the exported variables from the setup section above.
 
