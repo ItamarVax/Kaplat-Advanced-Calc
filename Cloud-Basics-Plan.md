@@ -48,7 +48,7 @@ Deploy the Docker container from EX5 (calculator server) to a cloud provider and
 ## Phase 2: AWS Setup & Configuration
 
 ### 2.1 AWS Account Setup
-- [ ] Access AWS account (using MTA student license)
+- [ ] Access AWS account
 - [ ] Verify account has necessary permissions for:
   - ECR (Elastic Container Registry)
   - ECS (Elastic Container Service) or Elastic Beanstalk
